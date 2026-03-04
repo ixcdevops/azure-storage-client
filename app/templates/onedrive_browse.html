@@ -1,0 +1,299 @@
+{% extends "base.html" %}
+{% block title %}OneDrive – {{ display_name }}{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item {% if not breadcrumbs %}active{% endif %}">
+      {% if breadcrumbs %}
+        <a href="{{ url_for('onedrive.browse') }}">
+          <i class="bi bi-house-door me-1"></i> OneDrive
+        </a>
+      {% else %}
+        <i class="bi bi-house-door me-1"></i> OneDrive
+      {% endif %}
+    </li>
+    {% for bc in breadcrumbs %}
+      <li class="breadcrumb-item {% if loop.last %}active{% endif %}">
+        {% if loop.last %}
+          {{ bc.name }}
+        {% else %}
+          <a href="{{ url_for('onedrive.browse', item_id=bc.id) }}">{{ bc.name }}</a>
+        {% endif %}
+      </li>
+    {% endfor %}
+  </ol>
+</nav>
+
+<!-- Destination selector -->
+<form method="post" action="{{ url_for('storage.set_dest') }}" class="mb-3">
+  <input type="hidden" name="next" value="{{ request.url }}" />
+  <div class="card border-primary">
+    <div class="card-body py-2 px-3">
+      <div class="row align-items-center g-2">
+        <div class="col-auto">
+          <label for="destInput" class="col-form-label fw-semibold">
+            <i class="bi bi-folder-symlink me-1 text-primary"></i> Download destination:
+          </label>
+        </div>
+        <div class="col">
+          <input
+            id="destInput"
+            name="dest_subfolder"
+            type="text"
+            class="form-control form-control-sm"
+            list="localFolderList"
+            placeholder="/ (root) – or type a sub-folder path"
+            value="{{ dest_subfolder }}"
+          />
+          <datalist id="localFolderList">
+            {% for f in local_folders %}
+              <option value="{{ f }}">{{ f if f else '/ (root)' }}</option>
+            {% endfor %}
+          </datalist>
+        </div>
+        <div class="col-auto">
+          <button type="submit" class="btn btn-sm btn-primary">
+            <i class="bi bi-check-lg me-1"></i> Set
+          </button>
+        </div>
+        <div class="col-auto">
+          <span class="text-muted small">Relative to volume mount root</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</form>
+
+<!-- Actions bar -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h5 class="mb-0">
+    <i class="bi bi-cloud me-1 text-primary"></i>
+    {% if breadcrumbs %}{{ breadcrumbs[-1].name }}{% else %}My Files{% endif %}
+  </h5>
+  <div>
+    {% if item_id %}
+      <button
+        type="button"
+        class="btn btn-sm btn-outline-info me-1"
+        title="Details for current folder"
+        data-item-id="{{ item_id }}"
+        onclick="fetchDetails(this)"
+      >
+        <i class="bi bi-info-circle me-1"></i> Details
+      </button>
+      <form id="form-all-view" method="post" action="{{ url_for('onedrive.download') }}" class="d-inline">
+        <input type="hidden" name="item_id" value="{{ item_id }}" />
+        <input type="hidden" name="item_name" value="{{ breadcrumbs[-1].name if breadcrumbs else 'folder' }}" />
+        <input type="hidden" name="is_folder" value="1" />
+        <input type="hidden" name="current_item_id" value="{{ item_id }}" />
+        <button
+          type="button"
+          class="btn btn-sm btn-success"
+          data-form-id="form-all-view"
+          data-source="{{ breadcrumbs[-1].name if breadcrumbs else 'folder' }}"
+          data-dest="{{ dest_subfolder if dest_subfolder else '/' }}"
+          onclick="confirmDownload(this)"
+        >
+          <i class="bi bi-download me-1"></i> Download All in View
+        </button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+
+{% if items %}
+<div class="table-responsive">
+  <table class="table table-hover align-middle">
+    <thead class="table-light">
+      <tr>
+        <th>Name</th>
+        <th>Size</th>
+        <th>Last Modified</th>
+        <th class="text-end">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr>
+        <td>
+          {% if item.is_folder %}
+            <a href="{{ url_for('onedrive.browse', item_id=item.id) }}">
+              <i class="bi bi-folder-fill text-warning me-1"></i> {{ item.name }}
+            </a>
+            <span class="text-muted small ms-1">({{ item.child_count }} items)</span>
+          {% else %}
+            <i class="bi bi-file-earmark me-1 text-secondary"></i> {{ item.name }}
+          {% endif %}
+        </td>
+        <td class="text-muted small">
+          {% if not item.is_folder %}{{ item.size_display }}{% else %}—{% endif %}
+        </td>
+        <td class="text-muted small">{{ item.last_modified[:10] if item.last_modified else '—' }}</td>
+        <td class="text-end">
+          {% if item.is_folder %}
+            <button
+              type="button"
+              class="btn btn-sm btn-outline-info me-1"
+              title="Folder details"
+              data-item-id="{{ item.id }}"
+              onclick="fetchDetails(this)"
+            >
+              <i class="bi bi-info-circle"></i>
+            </button>
+            <form id="form-folder-{{ loop.index }}" method="post" action="{{ url_for('onedrive.download') }}" class="d-inline">
+              <input type="hidden" name="item_id" value="{{ item.id }}" />
+              <input type="hidden" name="item_name" value="{{ item.name }}" />
+              <input type="hidden" name="is_folder" value="1" />
+              <input type="hidden" name="current_item_id" value="{{ item_id or '' }}" />
+              <button
+                type="button"
+                class="btn btn-sm btn-outline-success"
+                title="Download folder"
+                data-form-id="form-folder-{{ loop.index }}"
+                data-source="{{ item.name }}"
+                data-dest="{{ dest_subfolder if dest_subfolder else '/' }}"
+                onclick="confirmDownload(this)"
+              >
+                <i class="bi bi-download"></i>
+              </button>
+            </form>
+          {% else %}
+            <form method="post" action="{{ url_for('onedrive.download') }}" class="d-inline">
+              <input type="hidden" name="item_id" value="{{ item.id }}" />
+              <input type="hidden" name="item_name" value="{{ item.name }}" />
+              <input type="hidden" name="is_folder" value="0" />
+              <input type="hidden" name="current_item_id" value="{{ item_id or '' }}" />
+              <button class="btn btn-sm btn-outline-success" type="submit" title="Download file">
+                <i class="bi bi-download"></i>
+              </button>
+            </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="alert alert-info">This folder is empty.</div>
+{% endif %}
+
+<!-- Details modal -->
+<div class="modal fade" id="detailsModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-info-circle me-1"></i> Details</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="detailsLoading" class="text-center py-4">
+          <div class="spinner-border text-primary" role="status"></div>
+          <p class="mt-2 text-muted">Scanning contents&hellip;</p>
+        </div>
+        <div id="detailsError" class="alert alert-danger d-none"></div>
+        <div id="detailsResults" class="d-none">
+          <table class="table table-sm mb-3">
+            <tbody>
+              <tr><th class="text-muted" style="width:40%">Folders</th><td id="detFolders"></td></tr>
+              <tr><th class="text-muted">Files</th><td id="detFiles"></td></tr>
+              <tr><th class="text-muted">Total size</th><td id="detSize"></td></tr>
+            </tbody>
+          </table>
+          <h6>File types</h6>
+          <table class="table table-sm table-striped">
+            <thead class="table-light"><tr><th>Extension</th><th class="text-end">Count</th></tr></thead>
+            <tbody id="detTypesBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Download confirmation modal -->
+<div class="modal fade" id="downloadConfirmModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-download me-1"></i> Confirm Download</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-1">This will queue a download of all files in:</p>
+        <p class="fw-bold" id="dlConfirmSource"></p>
+        <p class="mb-1">Destination:</p>
+        <p class="fw-bold" id="dlConfirmDest"></p>
+        <p class="text-muted small mb-0">The job will run in the background. Check the <a href="{{ url_for('jobs.index') }}">Jobs</a> page for progress.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-success" id="dlConfirmBtn">
+          <i class="bi bi-download me-1"></i> Queue Download
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  /* ── Details modal ── */
+  const detModal = new bootstrap.Modal(document.getElementById('detailsModal'));
+
+  function fetchDetails(btn) {
+    const itemId = btn.dataset.itemId;
+    const url = `/onedrive/api/details/${encodeURIComponent(itemId)}`;
+
+    document.getElementById('detailsLoading').classList.remove('d-none');
+    document.getElementById('detailsResults').classList.add('d-none');
+    document.getElementById('detailsError').classList.add('d-none');
+    detModal.show();
+
+    fetch(url)
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then(data => {
+        document.getElementById('detailsLoading').classList.add('d-none');
+        document.getElementById('detFolders').textContent = data.folder_count;
+        document.getElementById('detFiles').textContent = data.file_count;
+        document.getElementById('detSize').textContent = data.total_size_display;
+        const tbody = document.getElementById('detTypesBody');
+        tbody.innerHTML = '';
+        data.file_types.forEach(ft => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td><code>${ft.ext}</code></td><td class="text-end">${ft.count}</td>`;
+          tbody.appendChild(tr);
+        });
+        document.getElementById('detailsResults').classList.remove('d-none');
+      })
+      .catch(err => {
+        document.getElementById('detailsLoading').classList.add('d-none');
+        const el = document.getElementById('detailsError');
+        el.textContent = 'Failed to load details: ' + err.message;
+        el.classList.remove('d-none');
+      });
+  }
+
+  /* ── Download confirmation ── */
+  let _pendingFormId = null;
+  const modal = new bootstrap.Modal(document.getElementById('downloadConfirmModal'));
+
+  function confirmDownload(btn) {
+    _pendingFormId = btn.dataset.formId;
+    document.getElementById('dlConfirmSource').textContent = btn.dataset.source;
+    document.getElementById('dlConfirmDest').textContent = btn.dataset.dest;
+    modal.show();
+  }
+
+  document.getElementById('dlConfirmBtn').addEventListener('click', () => {
+    modal.hide();
+    if (_pendingFormId) {
+      document.getElementById(_pendingFormId).submit();
+      _pendingFormId = null;
+    }
+  });
+</script>
+{% endblock %}

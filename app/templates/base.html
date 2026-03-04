@@ -33,9 +33,15 @@
       <div class="collapse navbar-collapse" id="mainNav">
         <ul class="navbar-nav me-auto mb-2 mb-lg-0">
           <li class="nav-item">
-            <a class="nav-link" href="{{ url_for('storage.containers') }}">
-              <i class="bi bi-archive"></i> Storage
-            </a>
+            {% if session.get('connection_type') == 'onedrive' %}
+              <a class="nav-link" href="{{ url_for('onedrive.browse') }}">
+                <i class="bi bi-microsoft"></i> OneDrive
+              </a>
+            {% else %}
+              <a class="nav-link" href="{{ url_for('storage.containers') }}">
+                <i class="bi bi-archive"></i> Storage
+              </a>
+            {% endif %}
           </li>
           <li class="nav-item">
             <a class="nav-link" href="{{ url_for('files.browse') }}">
@@ -50,7 +56,16 @@
         </ul>
 
         <div class="d-flex align-items-center">
-          {% if session.get('account_name') %}
+          {% if session.get('connection_type') == 'onedrive' %}
+            <span class="badge bg-success me-2">
+              <i class="bi bi-microsoft"></i> {{ session.get('onedrive_display_name', 'OneDrive') }}
+            </span>
+            <form action="{{ url_for('onedrive.disconnect') }}" method="post" class="m-0">
+              <button class="btn btn-sm btn-outline-light" type="submit">
+                <i class="bi bi-box-arrow-right"></i> Disconnect
+              </button>
+            </form>
+          {% elif session.get('account_name') %}
             <span class="badge bg-success me-2">
               <i class="bi bi-plug-fill"></i> {{ session['account_name'] }}
             </span>
@@ -60,9 +75,14 @@
               </button>
             </form>
           {% else %}
-            <span class="badge bg-secondary">
+            <span class="badge bg-secondary me-2">
               <i class="bi bi-plug"></i> Not connected
             </span>
+            <form action="{{ url_for('storage.clear_session') }}" method="post" class="m-0">
+              <button class="btn btn-sm btn-outline-light" type="submit" title="Clear stale session data">
+                <i class="bi bi-arrow-counterclockwise"></i> Clear Session
+              </button>
+            </form>
           {% endif %}
         </div>
       </div>

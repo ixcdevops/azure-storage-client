@@ -62,6 +62,8 @@ def _resolve_dest(base: str, subfolder: str) -> str:
 
 @storage_bp.route("/")
 def index():
+    if session.get("connection_type") == "onedrive" or session.get("onedrive_account_id"):
+        return redirect("/onedrive/browse")
     if session.get("account_name"):
         return redirect(url_for("storage.containers"))
     return redirect(url_for("storage.connect"))
@@ -95,17 +97,37 @@ def connect():
 
         session["account_name"] = account_name
         session["account_key"] = account_key
+        session["connection_type"] = "azure"
+        # Clear any OneDrive session state
+        session.pop("onedrive_account_id", None)
+        session.pop("onedrive_display_name", None)
         flash(f"Connected to {account_name}.", "success")
         return redirect(url_for("storage.containers"))
 
-    return render_template("connect.html", account_name=env_name, account_key=env_key)
+    return render_template(
+        "connect.html",
+        account_name=env_name,
+        account_key=env_key,
+        onedrive_configured=bool(
+            current_app.config.get("ONEDRIVE_CLIENT_ID")
+        ),
+    )
 
 
 @storage_bp.route("/disconnect", methods=["POST"])
 def disconnect():
     session.pop("account_name", None)
     session.pop("account_key", None)
+    session.pop("connection_type", None)
     flash("Disconnected.", "info")
+    return redirect(url_for("storage.connect"))
+
+
+@storage_bp.route("/clear-session", methods=["POST"])
+def clear_session():
+    """Wipe the entire Flask session (useful for clearing stale OAuth state)."""
+    session.clear()
+    flash("Session cleared.", "info")
     return redirect(url_for("storage.connect"))
 
 
