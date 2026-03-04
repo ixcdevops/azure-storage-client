@@ -14,6 +14,10 @@ services:
       - AZURE_STORAGE_ACCOUNT_KEY=${AZURE_STORAGE_ACCOUNT_KEY:-}
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      # OneDrive – set these to enable the OneDrive connect option
+      - ONEDRIVE_CLIENT_ID=${ONEDRIVE_CLIENT_ID:-}
+      - ONEDRIVE_CLIENT_SECRET=${ONEDRIVE_CLIENT_SECRET:-}
+      - ONEDRIVE_REDIRECT_URI=${ONEDRIVE_REDIRECT_URI:-http://localhost:8080/onedrive/callback}
     depends_on:
       - redis
     restart: unless-stopped
@@ -23,7 +27,7 @@ services:
     container_name: storage-celery
     command: celery -A run.celery_app worker --loglevel=info --concurrency=4
     volumes:
-      - ./data:/data
+      - ./DATA:/data
     environment:
       - DOWNLOAD_PATH=/data
       - SECRET_KEY=${SECRET_KEY:-super-secret-change-me}
@@ -31,6 +35,9 @@ services:
       - AZURE_STORAGE_ACCOUNT_KEY=${AZURE_STORAGE_ACCOUNT_KEY:-}
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - ONEDRIVE_CLIENT_ID=${ONEDRIVE_CLIENT_ID:-}
+      - ONEDRIVE_CLIENT_SECRET=${ONEDRIVE_CLIENT_SECRET:-}
+      - ONEDRIVE_REDIRECT_URI=${ONEDRIVE_REDIRECT_URI:-http://localhost:8080/onedrive/callback}
     depends_on:
       - redis
     restart: unless-stopped

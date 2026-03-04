@@ -4,9 +4,11 @@
 {% block content %}
 <div class="row justify-content-center">
   <div class="col-md-6 col-lg-5">
-    <div class="card shadow-sm">
+
+    <!-- Azure Blob Storage -->
+    <div class="card shadow-sm mb-3">
       <div class="card-header bg-primary text-white">
-        <h5 class="mb-0"><i class="bi bi-plug-fill me-1"></i> Connect to Azure Storage</h5>
+        <h5 class="mb-0"><i class="bi bi-cloud-fill me-1"></i> Azure Blob Storage</h5>
       </div>
       <div class="card-body">
         <form method="post" autocomplete="off">
@@ -45,11 +47,48 @@
             </div>
           </div>
           <button type="submit" class="btn btn-primary w-100">
-            <i class="bi bi-box-arrow-in-right me-1"></i> Connect
+            <i class="bi bi-box-arrow-in-right me-1"></i> Connect to Azure
           </button>
         </form>
       </div>
     </div>
+
+    <!-- Divider -->
+    <div class="d-flex align-items-center my-3">
+      <hr class="flex-grow-1" />
+      <span class="mx-3 text-muted small">or</span>
+      <hr class="flex-grow-1" />
+    </div>
+
+    <!-- OneDrive Personal -->
+    <div class="card shadow-sm">
+      <div class="card-header bg-dark text-white">
+        <h5 class="mb-0">
+          <i class="bi bi-microsoft me-1"></i> OneDrive Personal
+        </h5>
+      </div>
+      <div class="card-body">
+        {% if onedrive_configured %}
+          <p class="text-muted small mb-3">
+            Sign in with your personal Microsoft account to browse and download
+            files from your OneDrive.
+          </p>
+          <a href="{{ url_for('onedrive.connect') }}" class="btn btn-dark w-100">
+            <i class="bi bi-box-arrow-in-right me-1"></i> Sign in with Microsoft
+          </a>
+        {% else %}
+          <p class="text-muted small mb-2">
+            OneDrive is not configured. Set
+            <code>ONEDRIVE_CLIENT_ID</code> and <code>ONEDRIVE_CLIENT_SECRET</code>
+            environment variables to enable this option.
+          </p>
+          <button class="btn btn-dark w-100" disabled>
+            <i class="bi bi-lock me-1"></i> Sign in with Microsoft
+          </button>
+        {% endif %}
+      </div>
+    </div>
+
   </div>
 </div>
 {% endblock %}

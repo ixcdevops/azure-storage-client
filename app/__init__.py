@@ -47,9 +47,11 @@ def create_app() -> Flask:
     from .routes.storage import storage_bp  # noqa: E402
     from .routes.files import files_bp  # noqa: E402
     from .routes.jobs import jobs_bp  # noqa: E402
+    from .routes.onedrive import onedrive_bp  # noqa: E402
 
     app.register_blueprint(storage_bp)
     app.register_blueprint(files_bp)
     app.register_blueprint(jobs_bp)
+    app.register_blueprint(onedrive_bp)
 
     return app
