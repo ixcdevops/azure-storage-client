@@ -1,0 +1,38 @@
+/* Custom styles for Azure Storage Client */
+
+/* Give the body a light grey background */
+body {
+  background-color: #f8f9fa;
+}
+
+/* Make the nav brand a bit bolder */
+.navbar-brand {
+  font-weight: 600;
+}
+
+/* Breadcrumb spacing */
+.breadcrumb {
+  background: transparent;
+  padding: 0;
+  margin-bottom: 0.5rem;
+}
+
+/* Table row hover cursor for rows with links */
+.table-hover tbody tr {
+  cursor: default;
+}
+
+/* Shrink action-column buttons */
+.table td .btn-sm {
+  padding: 0.2rem 0.45rem;
+}
+
+/* Keep modal inputs from overflowing */
+.modal-body .form-control {
+  max-width: 100%;
+}
+
+/* Badge alignment fix inside navbar */
+.navbar .badge {
+  vertical-align: middle;
+}

@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}Download Jobs – Azure Storage Client{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0"><i class="bi bi-list-task me-1"></i> Download Jobs</h4>
+  <div class="d-flex gap-2 align-items-center">
+    <span class="text-muted small" id="refreshLabel">Auto-refreshing…</span>
+    <a href="{{ url_for('jobs.index') }}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-clockwise"></i> Refresh Now
+    </a>
+  </div>
+</div>
+
+{% if jobs %}
+<div class="table-responsive">
+  <table class="table table-hover align-middle">
+    <thead class="table-light">
+      <tr>
+        <th style="width:9rem">Submitted</th>
+        <th>Item</th>
+        <th>Destination</th>
+        <th style="width:8rem">State</th>
+        <th style="width:14rem">Progress / Message</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for j in jobs %}
+      {% set state = j.state | upper %}
+      <tr>
+        <td class="text-muted small text-nowrap">{{ j.submitted or '—' }}</td>
+        <td>
+          {% if j.download_type == 'prefix' %}
+            <i class="bi bi-folder-fill text-warning me-1"></i>
+          {% else %}
+            <i class="bi bi-file-earmark text-secondary me-1"></i>
+          {% endif %}
+          <span class="small">
+            <span class="text-muted">{{ j.container_name }}/</span>{{ j.label or '—' }}
+          </span>
+        </td>
+        <td class="small text-muted">{{ j.dest or '/' }}</td>
+        <td>
+          {% if state == 'SUCCESS' and j.ok %}
+            <span class="badge bg-success">Done</span>
+          {% elif state == 'SUCCESS' and not j.ok %}
+            <span class="badge bg-danger">Error</span>
+          {% elif state == 'FAILURE' %}
+            <span class="badge bg-danger">Failed</span>
+          {% elif state in ('PROGRESS', 'STARTED') %}
+            <span class="badge bg-primary">Running</span>
+          {% elif state == 'REVOKED' %}
+            <span class="badge bg-secondary">Cancelled</span>
+          {% else %}
+            <span class="badge bg-secondary">Pending</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if j.total and j.total | int > 0 %}
+            {% set pct = ((j.done | int) / (j.total | int) * 100) | int %}
+            <div class="progress mb-1" style="height:6px">
+              <div
+                class="progress-bar {% if state == 'SUCCESS' and j.ok %}bg-success{% elif not j.ok %}bg-danger{% endif %}"
+                style="width: {{ pct }}%"
+              ></div>
+            </div>
+            <span class="text-muted small">{{ j.done }}/{{ j.total }}</span>
+          {% endif %}
+          {% if j.message %}
+            <div class="small {% if not j.ok %}text-danger{% else %}text-muted{% endif %} text-truncate" style="max-width:280px" title="{{ j.message }}">
+              {{ j.message }}
+            </div>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="alert alert-info">No jobs submitted yet. Download something from the Storage tab.</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Count running jobs; if any, auto-refresh the page every 4 seconds
+  const runningStates = new Set(['PROGRESS', 'STARTED', 'PENDING']);
+  const rows = document.querySelectorAll('tbody tr');
+  let hasRunning = false;
+  rows.forEach(row => {
+    const badge = row.querySelector('.badge');
+    if (badge && (badge.textContent.trim() === 'Running' || badge.textContent.trim() === 'Pending')) {
+      hasRunning = true;
+    }
+  });
+
+  const label = document.getElementById('refreshLabel');
+  if (hasRunning) {
+    let countdown = 4;
+    const interval = setInterval(() => {
+      countdown--;
+      label.textContent = `Refreshing in ${countdown}s…`;
+      if (countdown <= 0) {
+        clearInterval(interval);
+        window.location.reload();
+      }
+    }, 1000);
+  } else {
+    label.textContent = 'All jobs settled';
+  }
+</script>
+{% endblock %}

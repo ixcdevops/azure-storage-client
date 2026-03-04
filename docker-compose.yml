@@ -1,0 +1,41 @@
+services:
+  storage-client:
+    build: .
+    container_name: storage-client
+    ports:
+      - "8080:5000"
+    volumes:
+      - ./DATA:/data
+    environment:
+      - DOWNLOAD_PATH=/data
+      - SECRET_KEY=${SECRET_KEY:-super-secret-change-me}
+      # Optional – leave blank to enter credentials via the web UI
+      - AZURE_STORAGE_ACCOUNT_NAME=${AZURE_STORAGE_ACCOUNT_NAME:-}
+      - AZURE_STORAGE_ACCOUNT_KEY=${AZURE_STORAGE_ACCOUNT_KEY:-}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  celery-worker:
+    build: .
+    container_name: storage-celery
+    command: celery -A run.celery_app worker --loglevel=info --concurrency=4
+    volumes:
+      - ./data:/data
+    environment:
+      - DOWNLOAD_PATH=/data
+      - SECRET_KEY=${SECRET_KEY:-super-secret-change-me}
+      - AZURE_STORAGE_ACCOUNT_NAME=${AZURE_STORAGE_ACCOUNT_NAME:-}
+      - AZURE_STORAGE_ACCOUNT_KEY=${AZURE_STORAGE_ACCOUNT_KEY:-}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: storage-redis
+    restart: unless-stopped

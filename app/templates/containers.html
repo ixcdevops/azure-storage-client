@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}Containers – Azure Storage Client{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0"><i class="bi bi-archive me-1"></i> Containers</h4>
+  <span class="text-muted">{{ containers | length }} container(s)</span>
+</div>
+
+<!-- Destination selector -->
+<form method="post" action="{{ url_for('storage.set_dest') }}" class="mb-3">
+  <input type="hidden" name="next" value="{{ request.url }}" />
+  <div class="card border-primary">
+    <div class="card-body py-2 px-3">
+      <div class="row align-items-center g-2">
+        <div class="col-auto">
+          <label for="destInput" class="col-form-label fw-semibold">
+            <i class="bi bi-folder-symlink me-1 text-primary"></i> Download destination:
+          </label>
+        </div>
+        <div class="col">
+          <input
+            id="destInput"
+            name="dest_subfolder"
+            type="text"
+            class="form-control form-control-sm"
+            list="localFolderList"
+            placeholder="/ (root) – or type a sub-folder path"
+            value="{{ dest_subfolder }}"
+          />
+          <datalist id="localFolderList">
+            {% for f in local_folders %}
+              <option value="{{ f }}">{{ f if f else '/ (root)' }}</option>
+            {% endfor %}
+          </datalist>
+        </div>
+        <div class="col-auto">
+          <button type="submit" class="btn btn-sm btn-primary">
+            <i class="bi bi-check-lg me-1"></i> Set
+          </button>
+        </div>
+        <div class="col-auto">
+          <span class="text-muted small">Relative to volume mount root</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</form>
+
+{% if containers %}
+<div class="table-responsive">
+  <table class="table table-hover align-middle">
+    <thead class="table-light">
+      <tr>
+        <th><i class="bi bi-inbox-fill me-1"></i> Name</th>
+        <th>Last Modified</th>
+        <th class="text-end">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in containers %}
+      <tr>
+        <td>
+          <a href="{{ url_for('storage.browse_blobs', container_name=c.name) }}">
+            <i class="bi bi-inbox text-primary me-1"></i> {{ c.name }}
+          </a>
+        </td>
+        <td class="text-muted small">{{ c.last_modified }}</td>
+        <td class="text-end">
+          <form id="form-container-{{ loop.index }}" method="post" action="{{ url_for('storage.download') }}" class="d-inline">
+            <input type="hidden" name="container_name" value="{{ c.name }}" />
+            <input type="hidden" name="download_type" value="prefix" />
+            <input type="hidden" name="prefix" value="" />
+            <button
+              type="button"
+              class="btn btn-sm btn-outline-success"
+              title="Download entire container"
+              data-form-id="form-container-{{ loop.index }}"
+              data-source="{{ c.name }}"
+              data-dest="{{ dest_subfolder if dest_subfolder else '/' }}"
+              onclick="confirmDownload(this)"
+            >
+              <i class="bi bi-download"></i> Download All
+            </button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="alert alert-info">No containers found in this storage account.</div>
+{% endif %}
+
+<!-- Download confirmation modal -->
+<div class="modal fade" id="downloadConfirmModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-download me-1"></i> Confirm Download</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-1">This will queue a download of all files in:</p>
+        <p class="fw-bold" id="dlConfirmSource"></p>
+        <p class="mb-1">Destination:</p>
+        <p class="fw-bold" id="dlConfirmDest"></p>
+        <p class="text-muted small mb-0">The job will run in the background. Check the <a href="{{ url_for('jobs.index') }}">Jobs</a> page for progress.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-success" id="dlConfirmBtn">
+          <i class="bi bi-download me-1"></i> Queue Download
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  let _pendingFormId = null;
+  const modal = new bootstrap.Modal(document.getElementById('downloadConfirmModal'));
+
+  function confirmDownload(btn) {
+    _pendingFormId = btn.dataset.formId;
+    document.getElementById('dlConfirmSource').textContent = btn.dataset.source;
+    document.getElementById('dlConfirmDest').textContent = btn.dataset.dest;
+    modal.show();
+  }
+
+  document.getElementById('dlConfirmBtn').addEventListener('click', () => {
+    modal.hide();
+    if (_pendingFormId) {
+      document.getElementById(_pendingFormId).submit();
+      _pendingFormId = null;
+    }
+  });
+</script>
+{% endblock %}
