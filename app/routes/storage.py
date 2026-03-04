@@ -8,6 +8,7 @@ from flask import (
     Blueprint,
     current_app,
     flash,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -256,3 +257,23 @@ def download():
     return redirect(
         url_for("storage.browse_blobs", container_name=container_name, prefix=prefix)
     )
+
+
+@storage_bp.route("/api/details/<container_name>")
+def api_container_details(container_name: str):
+    """Return JSON stats for *container_name* (optionally scoped to a prefix).
+
+    Called on-demand via AJAX so we only enumerate blobs when the user
+    explicitly clicks the Details button.
+    """
+    client = _get_client()
+    if client is None:
+        return jsonify({"error": "Not connected"}), 401
+
+    prefix = request.args.get("prefix", "")
+
+    try:
+        details = blob_service.get_details(client, container_name, prefix)
+        return jsonify(details)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500

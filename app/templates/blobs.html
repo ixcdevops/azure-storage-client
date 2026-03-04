@@ -75,21 +75,33 @@
     <i class="bi bi-folder2-open me-1"></i>
     {% if prefix %}{{ prefix }}{% else %}/{% endif %}
   </h5>
-  <form id="form-all-view" method="post" action="{{ url_for('storage.download') }}" class="d-inline">
-    <input type="hidden" name="container_name" value="{{ container_name }}" />
-    <input type="hidden" name="download_type" value="prefix" />
-    <input type="hidden" name="prefix" value="{{ prefix }}" />
+  <div>
     <button
       type="button"
-      class="btn btn-sm btn-success"
-      data-form-id="form-all-view"
-      data-source="{{ container_name }}/{{ prefix if prefix else '(all)' }}"
-      data-dest="{{ dest_subfolder if dest_subfolder else '/' }}"
-      onclick="confirmDownload(this)"
+      class="btn btn-sm btn-outline-info me-1"
+      title="Details for current view"
+      data-container="{{ container_name }}"
+      data-prefix="{{ prefix }}"
+      onclick="fetchDetails(this)"
     >
-      <i class="bi bi-download me-1"></i> Download All in View
+      <i class="bi bi-info-circle me-1"></i> Details
     </button>
-  </form>
+    <form id="form-all-view" method="post" action="{{ url_for('storage.download') }}" class="d-inline">
+      <input type="hidden" name="container_name" value="{{ container_name }}" />
+      <input type="hidden" name="download_type" value="prefix" />
+      <input type="hidden" name="prefix" value="{{ prefix }}" />
+      <button
+        type="button"
+        class="btn btn-sm btn-success"
+        data-form-id="form-all-view"
+        data-source="{{ container_name }}/{{ prefix if prefix else '(all)' }}"
+        data-dest="{{ dest_subfolder if dest_subfolder else '/' }}"
+        onclick="confirmDownload(this)"
+      >
+        <i class="bi bi-download me-1"></i> Download All in View
+      </button>
+    </form>
+  </div>
 </div>
 
 {% if blobs %}
@@ -125,6 +137,16 @@
         <td class="text-muted small">{{ b.last_modified }}</td>
         <td class="text-end">
           {% if b.is_prefix %}
+            <button
+              type="button"
+              class="btn btn-sm btn-outline-info me-1"
+              title="Folder details"
+              data-container="{{ container_name }}"
+              data-prefix="{{ b.name }}"
+              onclick="fetchDetails(this)"
+            >
+              <i class="bi bi-info-circle"></i>
+            </button>
             <form id="form-folder-{{ loop.index }}" method="post" action="{{ url_for('storage.download') }}" class="d-inline">
               <input type="hidden" name="container_name" value="{{ container_name }}" />
               <input type="hidden" name="download_type" value="prefix" />
@@ -162,6 +184,39 @@
 <div class="alert alert-info">No blobs found at this path.</div>
 {% endif %}
 
+<!-- Details modal -->
+<div class="modal fade" id="detailsModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-info-circle me-1"></i> Details</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="detailsLoading" class="text-center py-4">
+          <div class="spinner-border text-primary" role="status"></div>
+          <p class="mt-2 text-muted">Scanning contents&hellip;</p>
+        </div>
+        <div id="detailsError" class="alert alert-danger d-none"></div>
+        <div id="detailsResults" class="d-none">
+          <table class="table table-sm mb-3">
+            <tbody>
+              <tr><th class="text-muted" style="width:40%">Folders</th><td id="detFolders"></td></tr>
+              <tr><th class="text-muted">Files</th><td id="detFiles"></td></tr>
+              <tr><th class="text-muted">Total size</th><td id="detSize"></td></tr>
+            </tbody>
+          </table>
+          <h6>File types</h6>
+          <table class="table table-sm table-striped" id="detTypesTable">
+            <thead class="table-light"><tr><th>Extension</th><th class="text-end">Count</th></tr></thead>
+            <tbody id="detTypesBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Download confirmation modal -->
 <div class="modal fade" id="downloadConfirmModal" tabindex="-1">
   <div class="modal-dialog">
@@ -189,6 +244,46 @@
 {% endblock %}
 {% block scripts %}
 <script>
+  /* ── Details modal ── */
+  const detModal = new bootstrap.Modal(document.getElementById('detailsModal'));
+
+  function fetchDetails(btn) {
+    const container = btn.dataset.container;
+    const prefix = btn.dataset.prefix || '';
+    const url = `/api/details/${encodeURIComponent(container)}` + (prefix ? `?prefix=${encodeURIComponent(prefix)}` : '');
+
+    document.getElementById('detailsLoading').classList.remove('d-none');
+    document.getElementById('detailsResults').classList.add('d-none');
+    document.getElementById('detailsError').classList.add('d-none');
+    document.querySelector('#detailsModal .modal-title').innerHTML =
+      '<i class="bi bi-info-circle me-1"></i> ' + container + (prefix ? '/' + prefix : '');
+    detModal.show();
+
+    fetch(url)
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then(data => {
+        document.getElementById('detailsLoading').classList.add('d-none');
+        document.getElementById('detFolders').textContent = data.folder_count;
+        document.getElementById('detFiles').textContent = data.file_count;
+        document.getElementById('detSize').textContent = data.total_size_display;
+        const tbody = document.getElementById('detTypesBody');
+        tbody.innerHTML = '';
+        data.file_types.forEach(ft => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td><code>${ft.ext}</code></td><td class="text-end">${ft.count}</td>`;
+          tbody.appendChild(tr);
+        });
+        document.getElementById('detailsResults').classList.remove('d-none');
+      })
+      .catch(err => {
+        document.getElementById('detailsLoading').classList.add('d-none');
+        const el = document.getElementById('detailsError');
+        el.textContent = 'Failed to load details: ' + err.message;
+        el.classList.remove('d-none');
+      });
+  }
+
+  /* ── Download confirmation ── */
   let _pendingFormId = null;
   const modal = new bootstrap.Modal(document.getElementById('downloadConfirmModal'));
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from collections import Counter
 from dataclasses import dataclass
 from typing import Generator
 
@@ -87,6 +88,68 @@ def list_blobs(
     # Sort: folders first, then alphabetically
     items.sort(key=lambda b: (not b.is_prefix, b.display_name.lower()))
     return items
+
+
+def get_details(
+    client: BlobServiceClient,
+    container_name: str,
+    prefix: str = "",
+) -> dict:
+    """Return aggregate stats for blobs in *container_name* under *prefix*.
+
+    Only called on-demand (via AJAX) to avoid unnecessary storage operations.
+    """
+    container = client.get_container_client(container_name)
+
+    total_files = 0
+    total_size = 0
+    folders: set[str] = set()
+    ext_counter: Counter[str] = Counter()
+
+    for blob in container.list_blobs(name_starts_with=prefix):
+        total_files += 1
+        total_size += blob.size or 0
+
+        # Track unique virtual folders
+        # Strip the current prefix so we only count sub-folders
+        rel_name = blob.name[len(prefix):]
+        parts = rel_name.rsplit("/", 1)
+        if len(parts) == 2 and parts[0]:
+            folder_parts = parts[0].split("/")
+            for i in range(len(folder_parts)):
+                folders.add("/".join(folder_parts[: i + 1]))
+
+        # File extension
+        base_name = blob.name.rsplit("/", 1)[-1]
+        _, _, ext = base_name.rpartition(".")
+        ext_key = f".{ext.lower()}" if ext else "(no extension)"
+        ext_counter[ext_key] += 1
+
+    # Human-readable size
+    if total_size >= 1 << 30:
+        size_str = f"{total_size / (1 << 30):.2f} GB"
+    elif total_size >= 1 << 20:
+        size_str = f"{total_size / (1 << 20):.2f} MB"
+    elif total_size >= 1 << 10:
+        size_str = f"{total_size / (1 << 10):.2f} KB"
+    else:
+        size_str = f"{total_size} B"
+
+    # Top extensions sorted by count desc
+    file_types = [
+        {"ext": ext, "count": count}
+        for ext, count in ext_counter.most_common(25)
+    ]
+
+    return {
+        "container": container_name,
+        "prefix": prefix,
+        "folder_count": len(folders),
+        "file_count": total_files,
+        "total_size": total_size,
+        "total_size_display": size_str,
+        "file_types": file_types,
+    }
 
 
 def download_blob(
