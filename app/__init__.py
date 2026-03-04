@@ -2,6 +2,7 @@ import os
 
 from celery import Celery, Task
 from flask import Flask
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from .config import Config
 
@@ -32,6 +33,7 @@ def celery_init_app(app: Flask) -> Celery:
 def create_app() -> Flask:
     """Application factory."""
     app = Flask(__name__)
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1, x_prefix=1)
     app.config.from_object(Config)
 
     # Ensure the download directory exists

@@ -32,4 +32,4 @@ class Config:
 
     # Ensure session cookie is sent on OAuth top-level redirects
     SESSION_COOKIE_SAMESITE: str = "Lax"
-    SESSION_COOKIE_SECURE: bool = False  # set True when serving over HTTPS
+    SESSION_COOKIE_SECURE: bool = os.environ.get("SESSION_COOKIE_SECURE", "false").lower() == "true"

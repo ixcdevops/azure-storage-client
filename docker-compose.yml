@@ -17,7 +17,9 @@ services:
       # OneDrive – set these to enable the OneDrive connect option
       - ONEDRIVE_CLIENT_ID=${ONEDRIVE_CLIENT_ID:-}
       - ONEDRIVE_CLIENT_SECRET=${ONEDRIVE_CLIENT_SECRET:-}
-      - ONEDRIVE_REDIRECT_URI=${ONEDRIVE_REDIRECT_URI:-http://localhost:8080/onedrive/callback}
+      # Set the ip address to your ZimaIP
+      - ONEDRIVE_REDIRECT_URI=${ONEDRIVE_REDIRECT_URI:-https://10.0.0.175/storage-client/onedrive/callback}
+      - SESSION_COOKIE_SECURE=true
     depends_on:
       - redis
     restart: unless-stopped
@@ -37,7 +39,7 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - ONEDRIVE_CLIENT_ID=${ONEDRIVE_CLIENT_ID:-}
       - ONEDRIVE_CLIENT_SECRET=${ONEDRIVE_CLIENT_SECRET:-}
-      - ONEDRIVE_REDIRECT_URI=${ONEDRIVE_REDIRECT_URI:-http://localhost:8080/onedrive/callback}
+      - ONEDRIVE_REDIRECT_URI=${ONEDRIVE_REDIRECT_URI:-https://10.0.0.175/storage-client/onedrive/callback}
     depends_on:
       - redis
     restart: unless-stopped
