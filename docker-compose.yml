@@ -1,45 +1,43 @@
 services:
   storage-client:
-    build: .
+    # build: .
+    image: ixcdevops/storage-client:2.0.5-threadpool
     container_name: storage-client
-    ports:
-      - "8080:5000"
+    # ports:
+    #   - "8080:5000"
     volumes:
-      - ./DATA:/data
+      - /media/SSD-Storage/OneDrive:/data
     environment:
-      - DOWNLOAD_PATH=/data
-      - SECRET_KEY=${SECRET_KEY:-super-secret-change-me}
-      # Optional – leave blank to enter credentials via the web UI
-      - AZURE_STORAGE_ACCOUNT_NAME=${AZURE_STORAGE_ACCOUNT_NAME:-}
-      - AZURE_STORAGE_ACCOUNT_KEY=${AZURE_STORAGE_ACCOUNT_KEY:-}
+      - AZURE_STORAGE_ACCOUNT_KEY=
+      - AZURE_STORAGE_ACCOUNT_NAME=
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
-      # OneDrive – set these to enable the OneDrive connect option
-      - ONEDRIVE_CLIENT_ID=${ONEDRIVE_CLIENT_ID:-}
-      - ONEDRIVE_CLIENT_SECRET=${ONEDRIVE_CLIENT_SECRET:-}
-      # Set the ip address to your ZimaIP
-      - ONEDRIVE_REDIRECT_URI=${ONEDRIVE_REDIRECT_URI:-https://10.0.0.175/storage-client/onedrive/callback}
-      - SESSION_COOKIE_SECURE=true
+      - DOWNLOAD_PATH=/data
+      - ONEDRIVE_CLIENT_ID=
+      - ONEDRIVE_CLIENT_SECRET=
+      - ONEDRIVE_REDIRECT_URI=https://zimaos.local/storage/onedrive/callback
+      - SECRET_KEY=
     depends_on:
       - redis
     restart: unless-stopped
 
   celery-worker:
-    build: .
+    # build: .
+    image: ixcdevops/storage-client:2.0.5-threadpool
     container_name: storage-celery
     command: celery -A run.celery_app worker --loglevel=info --concurrency=4
     volumes:
-      - ./DATA:/data
+      - /media/SSD-Storage/OneDrive:/data
     environment:
-      - DOWNLOAD_PATH=/data
-      - SECRET_KEY=${SECRET_KEY:-super-secret-change-me}
-      - AZURE_STORAGE_ACCOUNT_NAME=${AZURE_STORAGE_ACCOUNT_NAME:-}
-      - AZURE_STORAGE_ACCOUNT_KEY=${AZURE_STORAGE_ACCOUNT_KEY:-}
+      - AZURE_STORAGE_ACCOUNT_KEY=
+      - AZURE_STORAGE_ACCOUNT_NAME=
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
-      - ONEDRIVE_CLIENT_ID=${ONEDRIVE_CLIENT_ID:-}
-      - ONEDRIVE_CLIENT_SECRET=${ONEDRIVE_CLIENT_SECRET:-}
-      - ONEDRIVE_REDIRECT_URI=${ONEDRIVE_REDIRECT_URI:-https://10.0.0.175/storage-client/onedrive/callback}
+      - DOWNLOAD_PATH=/data
+      - ONEDRIVE_CLIENT_ID=
+      - ONEDRIVE_CLIENT_SECRET=
+      - ONEDRIVE_REDIRECT_URI=https://zimaos.local/storage/onedrive/callback
+      - SECRET_KEY=
     depends_on:
       - redis
     restart: unless-stopped
@@ -48,3 +46,16 @@ services:
     image: redis:7-alpine
     container_name: storage-redis
     restart: unless-stopped
+
+  nginx:
+    container_name: nginx
+    restart: unless-stopped
+    image: nginx:latest
+    ports:
+      - 80:80
+      - 443:443
+    depends_on:
+      - storage-client
+    volumes:
+      - ./nginx:/etc/nginx
+      - ./certs:/etc/letsencrypt

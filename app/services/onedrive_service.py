@@ -171,10 +171,10 @@ def _headers(token: str) -> dict[str, str]:
 
 
 def _graph_get(token: str, url: str, params: dict | None = None) -> dict:
-    """GET *url* from Microsoft Graph, retrying on 429 throttle responses."""
+    """GET *url* from Microsoft Graph, retrying on 429/503 responses."""
     for attempt in range(5):
         resp = requests.get(url, headers=_headers(token), params=params, timeout=30)
-        if resp.status_code == 429:
+        if resp.status_code in (429, 503):
             retry_after = int(resp.headers.get("Retry-After", 2 ** attempt))
             time.sleep(retry_after)
             continue
@@ -293,30 +293,46 @@ def get_parent_chain(token: str, item_id: str) -> list[dict]:
     return chain
 
 
+def _download_with_retry(url: str, dest_path: str, headers: dict | None = None, max_retries: int = 5) -> None:
+    """Stream-download *url* to *dest_path*, retrying on 429/503."""
+    for attempt in range(max_retries):
+        resp = requests.get(url, headers=headers, stream=True, timeout=60, allow_redirects=True)
+        if resp.status_code in (429, 503):
+            retry_after = int(resp.headers.get("Retry-After", 2 ** attempt))
+            time.sleep(retry_after)
+            continue
+        resp.raise_for_status()
+        with open(dest_path, "wb") as f:
+            for chunk in resp.iter_content(chunk_size=65536):
+                f.write(chunk)
+        return
+    resp.raise_for_status()
+
+
 def download_file(token: str, item_id: str, dest_dir: str, filename: str) -> str:
     """Download a single OneDrive file to *dest_dir*.
 
     Fetches a fresh download URL (via item metadata) to avoid using an expired
     pre-auth URL.  Returns the destination file path.
     """
-    # Get a fresh download URL
+    # Get a fresh download URL from item metadata
     data = _graph_get(
         token,
         f"{GRAPH_BASE}/me/drive/items/{item_id}",
         params={"$select": "id,name,@microsoft.graph.downloadUrl"},
     )
     download_url = data.get("@microsoft.graph.downloadUrl")
-    if not download_url:
-        raise RuntimeError(f"No download URL available for item {item_id}")
 
     os.makedirs(dest_dir, exist_ok=True)
     dest_path = os.path.join(dest_dir, filename)
 
-    with requests.get(download_url, stream=True, timeout=60) as r:
-        r.raise_for_status()
-        with open(dest_path, "wb") as f:
-            for chunk in r.iter_content(chunk_size=65536):
-                f.write(chunk)
+    if download_url:
+        # Use the pre-authenticated download URL directly
+        _download_with_retry(download_url, dest_path)
+    else:
+        # Fallback: use the /content endpoint (works for shortcuts, remote items, etc.)
+        content_url = f"{GRAPH_BASE}/me/drive/items/{item_id}/content"
+        _download_with_retry(content_url, dest_path, headers=_headers(token))
 
     return dest_path
 

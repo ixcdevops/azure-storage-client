@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import os
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 from celery import shared_task
 
 from .services import blob_service
@@ -138,27 +142,58 @@ def download_onedrive_folder_task(
             return {"status": "success", "message": "No files found in folder.", "done": 0, "total": 0}
 
         done = 0
-        import os
-        for file_item in all_files:
-            # Re-acquire token periodically (MSAL handles refresh automatically via cache)
-            if done % 20 == 0 and done > 0:
-                token = _get_onedrive_token(account_id, client_id, client_secret, authority, scopes)
+        errors: list[str] = []
+        token_lock = threading.Lock()
+        token_holder = [token]  # mutable container for sharing across threads
 
+        def _refresh_token() -> str:
+            with token_lock:
+                token_holder[0] = _get_onedrive_token(
+                    account_id, client_id, client_secret, authority, scopes
+                )
+                return token_holder[0]
+
+        def _download_one(file_item: dict) -> str:
             rel_path = file_item.get("relative_path", file_item["name"])
-            file_dest_dir = os.path.join(dest_dir, os.path.dirname(rel_path))
-
-            self.update_state(
-                state="PROGRESS",
-                meta={
-                    "status": f"Downloading {file_item['name']}",
-                    "done": done,
-                    "total": total,
-                },
-            )
+            file_dest_dir = os.path.join(dest_dir, folder_name, os.path.dirname(rel_path))
+            with token_lock:
+                current_token = token_holder[0]
             onedrive_service.download_file(
-                token, file_item["id"], file_dest_dir, file_item["name"]
+                current_token, file_item["id"], file_dest_dir, file_item["name"]
             )
-            done += 1
+            return file_item["name"]
+
+        max_workers = int(os.environ.get("ONEDRIVE_DOWNLOAD_WORKERS", 4))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(_download_one, f): f for f in all_files
+            }
+            for future in as_completed(futures):
+                file_item = futures[future]
+                try:
+                    future.result()
+                except Exception as exc:
+                    errors.append(f"{file_item['name']}: {exc}")
+                done += 1
+                # Refresh token periodically
+                if done % 20 == 0:
+                    _refresh_token()
+                self.update_state(
+                    state="PROGRESS",
+                    meta={
+                        "status": f"Downloaded {done}/{total}",
+                        "done": done,
+                        "total": total,
+                    },
+                )
+
+        if errors:
+            return {
+                "status": "error",
+                "message": f"Downloaded {done - len(errors)}/{total}. Errors: {'; '.join(errors[:5])}",
+                "done": done - len(errors),
+                "total": total,
+            }
 
         return {
             "status": "success",

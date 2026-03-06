@@ -9,3 +9,6 @@ data/
 *.egg-info
 dist
 build
+docker-compose.yml
+*.pem
+nginx/nginx.conf
